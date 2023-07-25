@@ -1,0 +1,73 @@
+clc;
+clear all:
+close all;
+% System parameters
+Nt = 2;          % Number of transmit antennas
+Nr = 2;          % Number of receive antennas
+N = 2;          % Number of subcarriers
+L = 2;           % Number of pilot symbols
+
+% Generate random channel matrix H
+H = (randn(Nr, Nt) + 1i*randn(Nr, Nt))/sqrt(2)
+disp(H)
+% Generate random transmitted data symbols
+X = (randn(Nt, N) + 1i*randn(Nt, N))/sqrt(2)
+disp(X)
+% Generate random pilot symbols
+P = (randn(Nt, L) + 1i*randn(Nt, L))/sqrt(2)
+disp(P)
+% Generate OFDM pilot matrix
+P_OFDM = zeros(Nt, N)
+P_OFDM(:, 1:L) = P
+
+% Perform OFDM modulation
+x = sqrt(N)*ifft(P_OFDM)
+
+% Add zero-padding
+x_pad = [zeros(Nt, 4), x, zeros(Nt, 4)]
+
+% Channel transmission
+y = H * x_pad
+disp(y)
+% Add AWGN noise
+snr_dB = input('enter the snr in db' )  % Range of SNR values in dB
+BER_LS = zeros(size(snr_dB))
+BER_MMSE = zeros(size(snr_dB))
+disp(BER_MMSE)
+for snr_idx = 1:length(snr_dB)
+    sigma = sqrt(0.5/(10^(snr_dB(snr_idx)/10)))  % Noise standard deviation
+    
+    n = (randn(Nr, N+8) + 1i*randn(Nr, N+8))*sigma/sqrt(2)
+    y_noisy = y + n;
+
+    % LS Channel Estimation
+    H_LS = y_noisy * pinv(x_pad)
+disp(H_LS)
+    % MMSE Channel Estimation
+    SNR = 10^(snr_dB(snr_idx)/10);   % Signal-to-Noise Ratio
+    H_MMSE = (x_pad * x_pad' + sigma^2/SNR*eye(Nt)) \ (x_pad * y_noisy')
+disp(H_MMSE)
+    % BER calculation
+    X_est_LS = H_LS * x_pad
+    X_est_MMSE = H_MMSE * x_pad
+    
+    X_est_LS = X_est_LS(:, 5:end-4) % Remove zero-padding
+    X_est_MMSE = X_est_MMSE(:, 5:end-4)  % Remove zero-padding
+    
+    [~, idx_LS] = max(abs(X - X_est_LS).^2, [], 1)
+    [~, idx_MMSE] = max(abs(X - X_est_MMSE).^2, [], 1)
+    
+    BER_LS(snr_idx) = sum(idx_LS ~= 1)/N
+    BER_MMSE(snr_idx) = sum(idx_MMSE ~= 1)/N
+end
+
+% Plot SNR vs BER graph
+figure;
+semilogy(snr_dB, BER_LS, 'b-o', snr_dB, BER_MMSE, 'r-o');
+hold on;
+
+grid on;
+xlabel('SNR (dB)');
+ylabel('Bit Error Rate (BER)');
+legend('LS', 'MMSE');
+title('SNR')
